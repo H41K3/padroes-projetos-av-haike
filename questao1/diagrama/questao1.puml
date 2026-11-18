@@ -1,0 +1,207 @@
+@startuml questao1
+title Questao 1 - Provisionamento Multinuvem\nAbstract Factory + Singleton (Configuracao e Auditoria)
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam nodesep 30
+skinparam ranksep 45
+hide empty members
+
+package "Abstract Factory" {
+    interface FabricaRecursos <<AbstractFactory>> {
+        +getProvedor(): String
+        +criarMaquina(): MaquinaVirtual
+        +criarArmazenamento(gb: int): Armazenamento
+        +criarFila(): FilaMensagens
+        +getCustoHoraMaquina(): double
+        +getCustoGb(): double
+        +getCustoFila(): double
+    }
+
+    class FabricaAws <<ConcreteFactory>> {
+        -seqMaquina: AtomicInteger
+        -seqArmazenamento: AtomicInteger
+        -seqFila: AtomicInteger
+    }
+
+    class FabricaAzure <<ConcreteFactory>> {
+        -seqMaquina: AtomicInteger
+        -seqArmazenamento: AtomicInteger
+        -seqFila: AtomicInteger
+    }
+
+    interface MaquinaVirtual <<AbstractProduct>> {
+        +getId(): String
+    }
+
+    interface Armazenamento <<AbstractProduct>> {
+        +getId(): String
+        +getGb(): int
+    }
+
+    interface FilaMensagens <<AbstractProduct>> {
+        +getId(): String
+    }
+
+    class MaquinaVirtualAws <<ConcreteProduct>> {
+        -id: String
+    }
+
+    class MaquinaVirtualAzure <<ConcreteProduct>> {
+        -id: String
+    }
+
+    class ArmazenamentoAws <<ConcreteProduct>> {
+        -id: String
+        -gb: int
+    }
+
+    class ArmazenamentoAzure <<ConcreteProduct>> {
+        -id: String
+        -gb: int
+    }
+
+    class FilaAws <<ConcreteProduct>> {
+        -id: String
+    }
+
+    class FilaAzure <<ConcreteProduct>> {
+        -id: String
+    }
+}
+
+class SeletorProvedor <<Escolhe o provedor>> {
+    -AWS: FabricaRecursos {static}
+    -AZURE: FabricaRecursos {static}
+    +escolher(provedor: String): FabricaRecursos {static}
+}
+
+class ProvisionadorAmbiente <<Client>> {
+    -HORAS_NO_MES: int = 730
+    -fabrica: FabricaRecursos
+    +provisionar(pedido: SolicitacaoAmbiente): Ambiente
+    -estimarCusto(pedido: SolicitacaoAmbiente): double
+}
+
+class Ambiente {
+    -nome: String
+    -provedor: String
+    -regiao: String
+    -custoMensal: double
+    +getCustoMensal(): double
+    +imprimirResumo(): void
+}
+
+class SolicitacaoAmbiente {
+    -nome: String
+    -provedor: String
+    -quantidadeMaquinas: int
+    -gb: int
+}
+
+class Moeda {
+    +formatar(valor: double): String {static}
+}
+
+class Main {
+    +main(args: String[]) {static}
+}
+
+package "Singleton" {
+    class Configuracao <<Singleton>> {
+        -instancia: Configuracao {static}
+        -regiaoPadrao: String
+        -orcamentoMaximo: double
+        -Configuracao()
+        +getInstancia(): Configuracao {static, synchronized}
+        +getRegiaoPadrao(): String
+        +getOrcamentoMaximo(): double
+    }
+
+    class Auditoria <<Singleton>> {
+        -INSTANCIA: Auditoria {static}
+        -registros: List<RegistroAuditoria>
+        -Auditoria()
+        +getInstancia(): Auditoria {static}
+        +registrar(ambiente: String, provedor: String, resultado: String): void {synchronized}
+        +imprimirHistorico(): void {synchronized}
+    }
+
+    class RegistroAuditoria {
+        -dataHora: LocalDateTime
+        -ambiente: String
+        -provedor: String
+        -resultado: String
+        +toString(): String
+    }
+}
+
+' realizacoes
+FabricaAws ..|> FabricaRecursos
+FabricaAzure ..|> FabricaRecursos
+MaquinaVirtualAws ..|> MaquinaVirtual
+MaquinaVirtualAzure ..|> MaquinaVirtual
+ArmazenamentoAws ..|> Armazenamento
+ArmazenamentoAzure ..|> Armazenamento
+FilaAws ..|> FilaMensagens
+FilaAzure ..|> FilaMensagens
+
+' fabricas criam os produtos do proprio provedor
+FabricaAws ..> MaquinaVirtualAws : <<create>>
+FabricaAws ..> ArmazenamentoAws : <<create>>
+FabricaAws ..> FilaAws : <<create>>
+FabricaAzure ..> MaquinaVirtualAzure : <<create>>
+FabricaAzure ..> ArmazenamentoAzure : <<create>>
+FabricaAzure ..> FilaAzure : <<create>>
+
+' escolha do provedor
+SeletorProvedor ..> FabricaAws : <<create>>
+SeletorProvedor ..> FabricaAzure : <<create>>
+SeletorProvedor ..> FabricaRecursos
+
+' montagem do ambiente (so conhece as interfaces)
+ProvisionadorAmbiente o--> "1" FabricaRecursos : fabrica
+ProvisionadorAmbiente ..> Ambiente : <<create>>
+ProvisionadorAmbiente ..> SolicitacaoAmbiente
+ProvisionadorAmbiente ..> Configuracao
+ProvisionadorAmbiente ..> Auditoria
+ProvisionadorAmbiente ..> Moeda
+
+Ambiente o--> "1..*" MaquinaVirtual
+Ambiente o--> "1" Armazenamento
+Ambiente o--> "1" FilaMensagens
+Ambiente ..> Moeda
+
+Auditoria "1" *--> "0..*" RegistroAuditoria
+Configuracao --> Configuracao : instancia unica
+Auditoria --> Auditoria : instancia unica
+
+Main ..> SeletorProvedor
+Main ..> ProvisionadorAmbiente
+Main ..> SolicitacaoAmbiente
+Main ..> Auditoria
+
+note right of FabricaRecursos
+  RNF01: cada fabrica so cria recursos
+  do proprio provedor, entao nao da
+  para misturar Aws com Azure.
+  RNF02: o ProvisionadorAmbiente recebe
+  a fabrica pronta e so conhece as interfaces.
+  RNF03: um novo provedor (Gcp) = nova
+  fabrica + novos produtos; so o
+  SeletorProvedor precisa de um case novo.
+end note
+
+note bottom of Configuracao
+  RNF04: o arquivo config.properties
+  e lido uma unica vez, na primeira
+  chamada de getInstancia().
+end note
+
+note bottom of Auditoria
+  RNF05: instancia unica e metodos
+  synchronized, entao execucoes
+  simultaneas nao perdem registros.
+end note
+
+@enduml
