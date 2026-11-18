@@ -1,0 +1,214 @@
+@startuml questao2
+title Questao 2 - Casa de Leiloes Online\nObserver (lances) + Strategy (comissao) + Decorator (servicos adicionais)
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam nodesep 30
+skinparam ranksep 45
+hide empty members
+
+package "Observer - comunicacao de lances" {
+    interface Observador <<Observer>> {
+        +atualizar(lote: Lote, lance: Lance): void
+    }
+
+    interface Proponente {
+        +getNome(): String
+    }
+
+    class Lote <<Subject / Context do Strategy>> {
+        -nome: String
+        -precoInicial: double
+        -precoReserva: double
+        -encerrado: boolean
+        -vendido: boolean
+        +adicionarObservador(o: Observador): void
+        +removerObservador(o: Observador): void
+        +receberLance(autor: Proponente, valor: double): void
+        -notificar(lance: Lance): void
+        +encerrar(): void
+        +setRegraComissao(regra: RegraComissao): void
+        +calcularComissao(): double
+        +getLanceAtual(): double
+        +getTotalLances(): int
+    }
+
+    class Lance {
+        -valor: double
+        -dataHora: LocalDateTime
+        +getAutor(): Proponente
+        +getValor(): double
+        +getDataHora(): LocalDateTime
+    }
+
+    class LanceRecusadoException <<Exception>> {
+    }
+
+    class Participante <<ConcreteObserver>> {
+        -nome: String
+        +acompanhar(lote: Lote): void
+        +deixarDeAcompanhar(lote: Lote): void
+        +darLance(lote: Lote, valor: double): void
+        +atualizar(lote: Lote, lance: Lance): void
+    }
+
+    class PainelLeiloeiro <<ConcreteObserver>> {
+        +atualizar(lote: Lote, lance: Lance): void
+    }
+
+    class Auditor <<ConcreteObserver>> {
+        -registros: List<String>
+        +atualizar(lote: Lote, lance: Lance): void
+        +imprimirRegistros(): void
+    }
+}
+
+package "Strategy - regra de comissao" {
+    interface RegraComissao <<Strategy>> {
+        +getNome(): String
+        +calcular(valorVenda: double): double
+    }
+
+    class ComissaoArte <<ConcreteStrategy>> {
+        20% do valor
+    }
+
+    class ComissaoVeiculos <<ConcreteStrategy>> {
+        8%, limite R$ 5.000,00
+    }
+
+    class ComissaoImoveis <<ConcreteStrategy>> {
+        3% + R$ 1.500,00
+    }
+
+    class ComissaoEletronicos <<ConcreteStrategy>> {
+        12%, minimo R$ 50,00
+    }
+
+    class Categoria {
+        -nome: String
+        +getNome(): String
+        +getRegraPadrao(): RegraComissao
+    }
+}
+
+package "Decorator - servicos adicionais" {
+    interface Fatura <<Component>> {
+        +getNomeLote(): String
+        +getValorVenda(): double
+        +getItens(): List<String>
+        +getTotal(): double
+    }
+
+    class FaturaLote <<ConcreteComponent>> {
+        -nomeLote: String
+        -valorVenda: double
+    }
+
+    abstract class ServicoAdicional <<Decorator>> {
+        #getDescricao(): String {abstract}
+        #getCusto(): double {abstract}
+    }
+
+    class SeguroTransporte <<ConcreteDecorator>> {
+        1,5% do valor de venda
+    }
+
+    class CertificadoAutenticidade <<ConcreteDecorator>> {
+        R$ 300,00
+    }
+
+    class EmbalagemEspecial <<ConcreteDecorator>> {
+        R$ 180,00
+    }
+
+    class EntregaExpressa <<ConcreteDecorator>> {
+        R$ 450,00
+    }
+
+    class ImpressoraFatura <<Client>> {
+        +imprimir(fatura: Fatura): void
+    }
+
+    class AcertoVendedor {
+        +imprimir(): void
+    }
+}
+
+class Moeda {
+    +formatar(valor: double): String {static}
+}
+
+class Main {
+    +main(args: String[]) {static}
+}
+
+' observer
+Lote o--> "0..*" Observador : observadores
+Participante ..|> Observador
+PainelLeiloeiro ..|> Observador
+Auditor ..|> Observador
+Participante ..|> Proponente
+Lote "1" *--> "0..*" Lance : lances
+Lance --> "1" Proponente : autor
+Lote ..> LanceRecusadoException : <<throws>>
+Observador ..> Lote
+Participante ..> Lote
+
+' strategy
+Lote o--> "1" RegraComissao : regraComissao
+Lote --> "1" Categoria
+Categoria o--> "1" RegraComissao : regraPadrao
+ComissaoArte ..|> RegraComissao
+ComissaoVeiculos ..|> RegraComissao
+ComissaoImoveis ..|> RegraComissao
+ComissaoEletronicos ..|> RegraComissao
+
+' decorator
+FaturaLote ..|> Fatura
+ServicoAdicional ..|> Fatura
+ServicoAdicional o--> "1" Fatura : fatura
+SeguroTransporte --|> ServicoAdicional
+CertificadoAutenticidade --|> ServicoAdicional
+EmbalagemEspecial --|> ServicoAdicional
+EntregaExpressa --|> ServicoAdicional
+FaturaLote ..> Lote : le nome e valor
+ImpressoraFatura ..> Fatura
+AcertoVendedor ..> Lote
+
+' utilitario e Main
+ImpressoraFatura ..> Moeda
+ServicoAdicional ..> Moeda
+Main ..> Lote
+Main ..> Participante
+Main ..> PainelLeiloeiro
+Main ..> Auditor
+Main ..> Categoria
+Main ..> ImpressoraFatura
+Main ..> AcertoVendedor
+Main ..> ServicoAdicional
+
+note right of Lote
+  RNF01: o Lote so conhece as interfaces
+  Observador e Proponente. Um novo tipo de
+  interessado e so uma classe nova.
+  RF03: quem deu o lance nao e notificado.
+end note
+
+note bottom of RegraComissao
+  RNF02: sem if/switch por categoria.
+  Cada categoria traz sua regra, e a troca
+  da campanha (RF07) e feita em tempo de
+  execucao com setRegraComissao().
+end note
+
+note bottom of ServicoAdicional
+  RNF03/RNF04: os servicos se empilham
+  em qualquer ordem e quantidade, sem
+  classes de combinacao. A impressora so
+  usa a interface Fatura.
+end note
+
+note "RNF05: Observer, Strategy e Decorator\nnao dependem uns dos outros.\nO Lote so referencia Observador e\nRegraComissao; a Fatura so le nome e valor." as N5
+
+@enduml
